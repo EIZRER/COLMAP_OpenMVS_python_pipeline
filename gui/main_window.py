@@ -181,6 +181,7 @@ class MainWindow(QMainWindow):
             self.gpu_check.setChecked(settings.get("use_gpu", True))
             self.refine_check.setChecked(settings.get("run_refine", True))
             self.texture_check.setChecked(settings.get("run_texture", True))
+            self.ml_features_check.setChecked(settings.get("use_ml_features", False))
         except Exception as e:
             self._log(f"[WARN] Could not load config: {e}")
 
@@ -191,6 +192,7 @@ class MainWindow(QMainWindow):
             cfg["settings"]["use_gpu"] = self.gpu_check.isChecked()
             cfg["settings"]["run_refine"] = self.refine_check.isChecked()
             cfg["settings"]["run_texture"] = self.texture_check.isChecked()
+            cfg["settings"]["use_ml_features"] = self.ml_features_check.isChecked()
             with open(CONFIG_PATH, "w") as f:
                 yaml.dump(cfg, f, default_flow_style=False)
             self._log("Config saved.")

@@ -10,6 +10,7 @@ from core.exceptions import ConfigError
 from pipeline.colmap_runner import COLMAPRunner
 from pipeline.openmvs_runner import OpenMVSRunner
 from pipeline.model_converter import collect_outputs
+from ml.ml_feature_pipeline import run_ml_feature_pipeline
 
 logger = get_logger("pipeline")
 
@@ -73,6 +74,7 @@ class PhotogrammetryPipeline:
         self.openmvs = OpenMVSRunner(exes)
         self.run_refine = settings.get("run_refine", True)
         self.run_texture = settings.get("run_texture", True)
+        self.use_ml_features = settings.get("use_ml_features", False)
 
     def _validate_executables(self):
         for name, path in self.cfg["executables"].items():
@@ -120,14 +122,29 @@ class PhotogrammetryPipeline:
         self.colmap.create_database(paths["database"], log, abort_event)
 
         # ── 2. Feature Extraction ─────────────────────────────────────────────
+        # Always run COLMAP feature_extractor to populate cameras/images tables.
+        # When ML features are enabled the keypoints/descriptors will be
+        # overwritten by SuperPoint in step 3.
         check_abort()
-        progress(2, "Extracting Features")
+        label = "Extracting Features (SuperPoint)" if self.use_ml_features else "Extracting Features (SIFT)"
+        progress(2, label)
         self.colmap.extract_features(paths["database"], image_dir, log, abort_event)
 
         # ── 3. Feature Matching ───────────────────────────────────────────────
         check_abort()
-        progress(3, "Matching Features")
-        self.colmap.match_features(paths["database"], log, abort_event)
+        if self.use_ml_features:
+            progress(3, "Matching Features (LightGlue)")
+            run_ml_feature_pipeline(
+                image_dir=image_dir,
+                database_path=str(paths["database"]),
+                use_gpu=self.colmap.use_gpu,
+                max_keypoints=2048,
+                log_callback=log,
+                abort_event=abort_event,
+            )
+        else:
+            progress(3, "Matching Features (SIFT)")
+            self.colmap.match_features(paths["database"], log, abort_event)
 
         # ── 4. Mapper ─────────────────────────────────────────────────────────
         check_abort()
