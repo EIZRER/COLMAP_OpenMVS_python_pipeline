@@ -95,6 +95,21 @@ QPushButton#open_btn {
 QPushButton#open_btn:hover {
     background-color: #cfe2a6;
 }
+QPushButton#view_btn {
+    background-color: #cba6f7;
+    color: #1e1e2e;
+    font-weight: bold;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 14px;
+}
+QPushButton#view_btn:hover {
+    background-color: #d8b4fe;
+}
+QPushButton#view_btn:disabled {
+    background-color: #45475a;
+    color: #6c7086;
+}
 QPushButton#abort_btn {
     background-color: #f38ba8;
     color: #1e1e2e;

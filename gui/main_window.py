@@ -14,8 +14,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from gui.worker_thread import WorkerThread
+from gui.viewer_thread import ViewerThread
 from core.paths import ROOT_DIR
 from pipeline.pipeline import PhotogrammetryPipeline
+from utils.eval_chamfer import show_mesh_with_metrics
 
 CONFIG_PATH = str(ROOT_DIR / "config" / "config.yaml")
 TOTAL_STEPS = 9
@@ -27,6 +29,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Photogrammetry Pipeline")
         self.setMinimumSize(820, 680)
         self.worker = None
+        self.viewer_thread = None
 
         self._build_ui()
         self._load_config_to_ui()
@@ -126,6 +129,11 @@ class MainWindow(QMainWindow):
         self.open_btn.setVisible(False)
         self.open_btn.clicked.connect(self._on_open_output)
 
+        self.view_3d_btn = QPushButton("🔷  View 3D Result")
+        self.view_3d_btn.setObjectName("view_btn")
+        self.view_3d_btn.setVisible(False)
+        self.view_3d_btn.clicked.connect(self._on_view_3d)
+
         self.start_btn = QPushButton("▶  Start Reconstruction")
         self.start_btn.setObjectName("start_btn")
         self.start_btn.clicked.connect(self._on_start)
@@ -135,6 +143,7 @@ class MainWindow(QMainWindow):
         btn_row.addStretch()
         btn_row.addWidget(self.abort_btn)
         btn_row.addWidget(self.open_btn)
+        btn_row.addWidget(self.view_3d_btn)
         btn_row.addWidget(self.start_btn)
         root.addLayout(btn_row)
 
@@ -225,6 +234,7 @@ class MainWindow(QMainWindow):
         self.abort_btn.setEnabled(True)
         self.clean_btn.setEnabled(False)
         self.open_btn.setVisible(False)
+        self.view_3d_btn.setVisible(False)
         self._log("Starting pipeline...")
 
         self.worker = WorkerThread(image_dir, workspace_dir, CONFIG_PATH)
@@ -288,6 +298,7 @@ class MainWindow(QMainWindow):
         self._restore_buttons()
         self.output_dir = output_dir
         self.open_btn.setVisible(True)
+        self.view_3d_btn.setVisible(True)
 
     def _on_error(self, msg):
         self.status_label.setText("❌ Error — see log for details")
@@ -322,6 +333,36 @@ class MainWindow(QMainWindow):
         self.start_btn.setEnabled(True)
         self.abort_btn.setEnabled(False)
         self.clean_btn.setEnabled(True)
+
+    def _on_view_3d(self):
+        output_dir = getattr(self, "output_dir", None)
+        if not output_dir or not Path(output_dir).exists():
+            QMessageBox.warning(self, "No Output", "Pipeline output directory not found.")
+            return
+
+        self.view_3d_btn.setEnabled(False)
+        self.status_label.setText("Computing metrics...")
+
+        self.viewer_thread = ViewerThread(output_dir)
+        self.viewer_thread.log.connect(self._log)
+        self.viewer_thread.finished.connect(self._on_metrics_done)
+        self.viewer_thread.error.connect(self._on_metrics_error)
+        self.viewer_thread.start()
+
+    def _on_metrics_done(self, metrics: dict, mesh_path: str):
+        cd = metrics.get("chamfer_distance", 0.0)
+        rmse_val = metrics.get("rmse", 0.0)
+        self.status_label.setText(
+            f"Chamfer: {cd:.6f} m  |  RMSE: {rmse_val:.6f} m  — opening viewer..."
+        )
+        self.view_3d_btn.setEnabled(True)
+        show_mesh_with_metrics(mesh_path, metrics)
+
+    def _on_metrics_error(self, msg: str):
+        self.status_label.setText("❌ Metric computation failed — see log")
+        self._log(f"\n❌ [3D Viewer] {msg}")
+        self.view_3d_btn.setEnabled(True)
+        QMessageBox.critical(self, "Evaluation Error", msg)
 
     def _log(self, msg):
         self.log_view.appendPlainText(msg)
