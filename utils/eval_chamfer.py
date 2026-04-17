@@ -163,7 +163,9 @@ def _viewer_process(mesh_path: str, metrics: dict) -> None:
     # ── Load and prepare mesh ────────────────────────────────────────────────
     mesh = trimesh.load(mesh_path, force="mesh")
     if len(mesh.faces) > _MAX_DISPLAY_FACES:
-        mesh = mesh.simplify_quadric_decimation(_MAX_DISPLAY_FACES)
+        target_reduction = 1.0 - (_MAX_DISPLAY_FACES / len(mesh.faces))
+        target_reduction = max(0.01, min(0.99, target_reduction))
+        mesh = mesh.simplify_quadric_decimation(target_reduction)
 
     verts = np.asarray(mesh.vertices, dtype=np.float32)
     faces = np.ascontiguousarray(mesh.faces, dtype=np.uint32)
